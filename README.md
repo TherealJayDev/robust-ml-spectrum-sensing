@@ -57,7 +57,7 @@ Main finding: engineered feature representation dominates model choice under cha
 
 ## Repository structure
 
-.
+```.
 ├── src/
 │ ├── signals.py # BPSK, QPSK, 16-QAM, sine generators
 │ ├── channels.py # AWGN, Rayleigh, Rician + SNR scaling
@@ -77,7 +77,7 @@ Main finding: engineered feature representation dominates model choice under cha
 ├── notebook.ipynb # Main narrative and driver
 ├── requirements.txt
 └── README.md
-
+```
 
 ## Setup
 
