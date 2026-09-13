@@ -1,0 +1,28 @@
+# Large regenerable data files
+data/windows.npz
+data/raw_windows_subset.csv
+
+# Trained model files (regenerable)
+outputs/models/*.joblib
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
