@@ -76,10 +76,30 @@ META_COLS = ['index', 'label', 'snr_db', 'channel', 'modulation', 'seed']
 
 def load_data(features_path='data/features.csv',
               metadata_path='data/metadata.csv'):
-    """Load features and metadata, return merged DataFrame + feature column list."""
+    """Load features (and metadata if needed), return merged DataFrame + feature column list.
+
+    Handles two possible schemas:
+      1. features.csv already contains metadata columns (label, snr_db, channel, modulation).
+         In this case, features.csv is used as-is.
+      2. features.csv has only features + index; metadata is in metadata.csv.
+         In this case, the two files are merged on 'index'.
+    """
     features = pd.read_csv(features_path)
-    metadata = pd.read_csv(metadata_path)
-    df = metadata.merge(features, on='index', how='inner')
+
+    if 'label' in features.columns:
+        # Schema 1: features already has metadata columns.
+        df = features.copy()
+        # Fill in any missing metadata columns from metadata.csv.
+        needed = ['snr_db', 'channel', 'modulation']
+        missing = [c for c in needed if c not in df.columns]
+        if missing:
+            metadata = pd.read_csv(metadata_path)
+            df = df.merge(metadata[['index'] + missing], on='index', how='inner')
+    else:
+        # Schema 2: features.csv has only features + index; merge with metadata.
+        metadata = pd.read_csv(metadata_path)
+        df = metadata.merge(features, on='index', how='inner')
+
     feat_cols = [c for c in df.columns if c not in META_COLS]
     return df, feat_cols
 
