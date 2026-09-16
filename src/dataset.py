@@ -60,7 +60,7 @@ def build_dataset(
     snr_db_list  = (-20, -15, -10, -5, 0, 5, 10),
     channels     = ("awgn", "rayleigh", "rician"),
     modulations  = ("bpsk", "qpsk", "16qam", "fsk"),
-    n_per_class  = 500,
+    n_per_class  = 200,
     n_samples    = 1024,
     master_seed  = 42,
     verbose      = True,
