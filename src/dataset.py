@@ -33,7 +33,7 @@ A dict with three aligned-by-index pieces:
 import numpy as np
 import pandas as pd
 
-from .signals  import generate_bpsk, generate_qpsk, generate_16qam
+from .signals  import generate_bpsk, generate_qpsk, generate_16qam, generate_fsk
 from .channels import apply_awgn, apply_rayleigh, apply_rician, make_noise
 
 
@@ -41,6 +41,7 @@ MODULATION_FNS = {
     "bpsk":   generate_bpsk,
     "qpsk":   generate_qpsk,
     "16qam":  generate_16qam,
+    "fsk":    generate_fsk,
 }
 
 CHANNEL_FNS = {
@@ -58,7 +59,7 @@ def _seed_for(master_seed, index):
 def build_dataset(
     snr_db_list  = (-20, -15, -10, -5, 0, 5, 10),
     channels     = ("awgn", "rayleigh", "rician"),
-    modulations  = ("bpsk", "qpsk", "16qam"),
+    modulations  = ("bpsk", "qpsk", "16qam", "fsk"),
     n_per_class  = 500,
     n_samples    = 1024,
     master_seed  = 42,
