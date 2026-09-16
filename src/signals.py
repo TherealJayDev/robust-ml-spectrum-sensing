@@ -186,3 +186,57 @@ def generate_16qam(n_samples, rng, sps=8):
     # Normalise to unit average power (divides by sqrt(10) automatically)
     s = s / np.sqrt(np.mean(np.abs(s) ** 2))
     return s
+
+def generate_fsk(n_samples, rng, sps=8, f_dev=0.0625):
+    """
+    Generate a binary FSK (2-FSK) modulated signal carrying random data bits.
+
+    Binary FSK maps each bit to one of two carrier frequencies:
+        bit 0 -> exp(j * 2*pi * (-f_dev) * t)   (frequency -f_dev)
+        bit 1 -> exp(j * 2*pi * (+f_dev) * t)   (frequency +f_dev)
+    where t is a local time index within each symbol (0 to sps-1).
+
+    Each symbol carries 1 bit and is held for `sps` samples. The two 
+    frequencies are symmetric around DC (0), so the signal has zero mean 
+    frequency. With the default f_dev = 0.0625 and sps = 8, the frequency
+    spacing (2 * f_dev = 0.125) equals 1/sps, giving orthogonal FSK.
+
+    Phase is discontinuous at symbol boundaries. This is simpler than
+    continuous-phase FSK but has slightly broader spectrum, which is 
+    fine for a spectrum sensing feature extraction study.
+
+    Parameters
+    ----------
+    n_samples : int
+        Total number of samples in the output window.
+    rng : numpy.random.Generator
+        Seeded random generator (used to draw the random bits).
+    sps : int
+        Samples per symbol. With sps=8 and n_samples=1024, we transmit
+        1024 / 8 = 128 symbols.
+    f_dev : float
+        Frequency deviation from DC in normalised units (cycles per sample).
+        Default 0.0625 gives orthogonal FSK when sps=8.
+
+    Returns
+    -------
+    s : np.ndarray (complex), shape (n_samples,)
+        Unit-average-power binary FSK signal.
+    """
+    n_symbols = n_samples // sps
+    bits = rng.integers(0, 2, size=n_symbols)      # random 0/1 bits
+    freqs = (2 * bits - 1) * f_dev                 # 0 -> -f_dev, 1 -> +f_dev
+
+    # For each symbol, generate sps samples of exp(j * 2*pi * freq * t)
+    # where t is the local time index within the symbol.
+    t = np.arange(sps)
+    symbol_signals = np.exp(1j * 2 * np.pi * freqs[:, None] * t[None, :])
+    s = symbol_signals.flatten()
+
+    # Random starting phase per window (matches sine convention)
+    phase_start = rng.uniform(0, 2 * np.pi)
+    s = s * np.exp(1j * phase_start)
+
+    # Normalise to unit average power (|s[n]| = 1 already, defensive)
+    s = s / np.sqrt(np.mean(np.abs(s) ** 2))
+    return s
