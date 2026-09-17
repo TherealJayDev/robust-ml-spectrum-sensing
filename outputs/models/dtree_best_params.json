@@ -1,0 +1,5 @@
+{
+  "clf__max_depth": 3,
+  "clf__min_samples_leaf": 5,
+  "clf__min_samples_split": 2
+}

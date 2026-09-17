@@ -1,5 +1,5 @@
 {
   "clf__max_depth": 10,
-  "clf__min_samples_split": 5,
-  "clf__n_estimators": 300
+  "clf__min_samples_split": 2,
+  "clf__n_estimators": 100
 }

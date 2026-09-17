@@ -1,0 +1,5 @@
+{
+  "clf__metric": "manhattan",
+  "clf__n_neighbors": 25,
+  "clf__weights": "uniform"
+}
