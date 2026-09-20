@@ -485,3 +485,131 @@ def run_channel_mismatch(features_csv_path='data/features.csv',
     all_r = pd.concat(rows, ignore_index=True)
     all_r.to_csv(Path(output_dir) / "channel_mismatch.csv", index=False)
     return all_r
+
+"""
+Updated evaluation.py - adds run_modulation_mismatch for Experiment 7.
+
+Rest of the file is unchanged from the previous version.
+Only additions shown here; use this to update src/evaluation.py.
+"""
+
+def run_modulation_mismatch(features_csv_path='data/features.csv',
+                             metadata_csv_path='data/metadata.csv',
+                             output_dir="outputs/tables",
+                             seed=42,
+                             model_types=DEFAULT_MODELS):
+    """
+    Two modulation-mismatch configurations per document Section 17:
+
+    Config 1: Train on {BPSK, QPSK, FSK}, test on same test set.
+              Transfer loss measured on 16-QAM subset of test.
+
+    Config 2: Train on {BPSK, QPSK, 16-QAM}, test on same test set.
+              Transfer loss measured on FSK subset of test.
+
+    Plus matched baseline: train on all 4 modulations, test on same test set.
+    All three regimes evaluated on the SAME held-out test set for direct
+    per-condition comparability.
+
+    H0 (noise-only) windows have modulation='none' and are INCLUDED in every
+    training configuration. Excluding them would break H0/H1 balance and make
+    threshold calibration meaningless.
+
+    Two Pd measurements per (SNR, channel) cell:
+      - Pd_all: fraction of ALL H1 windows in the cell above threshold
+      - Pd_unseen: fraction of H1 windows with the config's unseen modulation
+                    above threshold (the transfer-loss measurement that matters)
+
+    For the matched baseline both '16qam' and 'fsk' get their Pd_unseen
+    computed so they can serve as the baseline for both configs.
+    """
+    from pathlib import Path
+
+    import numpy as np
+    from sklearn.model_selection import GridSearchCV, StratifiedKFold
+
+    from .models import (get_param_grid, load_features_and_labels,
+                         make_pipeline, stratified_split)
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    X_all, y_all, meta = load_features_and_labels(features_csv_path, metadata_csv_path)
+    splits = stratified_split(X_all, y_all, meta, seed=seed)
+    X_tr, y_tr, meta_tr = splits["train"]
+    X_te, y_te, meta_te = splits["test"]
+
+    # Definitions: each config keeps H0 (modulation='none') in training.
+    CONFIGS = [
+        {"name": "matched",  "train_mods": ["bpsk", "qpsk", "16qam", "fsk", "none"]},
+        {"name": "config1_no_16qam", "train_mods": ["bpsk", "qpsk", "fsk", "none"]},
+        {"name": "config2_no_fsk",   "train_mods": ["bpsk", "qpsk", "16qam", "none"]},
+    ]
+
+    print(f"Test set: {len(y_te)} windows total")
+    print(f"  16-QAM H1 in test: "
+      f"{int(((y_te == 1) & (meta_te['modulation'] == '16qam')).sum())}")
+    print(f"  FSK H1 in test:    "
+      f"{int(((y_te == 1) & (meta_te['modulation'] == 'fsk')).sum())}")
+
+    rows = []
+    for cfg in CONFIGS:
+        train_mask = meta_tr['modulation'].isin(cfg['train_mods']).values
+        X_tr_cfg = X_tr[train_mask]
+        y_tr_cfg = y_tr[train_mask]
+        print(f"\n=== {cfg['name']} training set: {len(y_tr_cfg)} windows ===")
+
+        for mt in model_types:
+            print(f"  training {mt.upper()}... ", end="", flush=True)
+            pipe = make_pipeline(mt, seed=seed)
+            grid = get_param_grid(mt)
+            cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=seed)
+            search = GridSearchCV(pipe, grid, scoring="roc_auc", cv=cv,
+                                   n_jobs=-1, verbose=0, refit=True)
+            search.fit(X_tr_cfg, y_tr_cfg)
+            y_score = search.predict_proba(X_te)[:, 1]
+            print(f"CV AUC = {search.best_score_:.4f}")
+
+            # Per-condition evaluation.
+            df_meta = meta_te.reset_index(drop=True).copy()
+            df_meta['score'] = y_score
+            df_meta['label'] = y_te
+
+            for snr in sorted(df_meta['snr_db'].unique()):
+                for ch in sorted(df_meta['channel'].unique()):
+                    cell = df_meta[(df_meta['snr_db'] == snr) &
+                                    (df_meta['channel'] == ch)]
+                    h0 = cell[cell['label'] == 0]
+                    h1_all = cell[cell['label'] == 1]
+                    h1_16q = h1_all[h1_all['modulation'] == '16qam']
+                    h1_fsk = h1_all[h1_all['modulation'] == 'fsk']
+
+                    if len(h0) == 0:
+                        thr = np.nan
+                    else:
+                        thr = float(np.quantile(h0['score'].values, 0.9))
+
+                    def pd_at(subset):
+                        if len(subset) == 0 or np.isnan(thr):
+                            return np.nan
+                        return float((subset['score'].values > thr).mean())
+
+                    rows.append({
+                        'model': mt.upper(),
+                        'training': cfg['name'],
+                        'snr_db': int(snr),
+                        'channel': ch,
+                        'threshold': thr,
+                        'n_h0': len(h0),
+                        'n_h1_all': len(h1_all),
+                        'n_h1_16qam': len(h1_16q),
+                        'n_h1_fsk': len(h1_fsk),
+                        'Pd_all': pd_at(h1_all),
+                        'Pd_16qam_only': pd_at(h1_16q),
+                        'Pd_fsk_only': pd_at(h1_fsk),
+                    })
+
+    result = pd.DataFrame(rows)
+    out_path = Path(output_dir) / "modulation_mismatch.csv"
+    result.to_csv(out_path, index=False)
+    print(f"\nSaved: {out_path}")
+    return result
